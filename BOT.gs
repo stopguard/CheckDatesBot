@@ -21,19 +21,21 @@ function setWebhook() {
 }
 
 function alertBOT(update) {
+
   // проверяем тип полученного, нам нужен только тип "сообщение"
   if (update.hasOwnProperty('message')) {
     let msg = update.message;
     let inputChatID = msg.chat.id;
-
+    Logger.log(inputChatID)
+    Logger.log(msg)
     // проверяем, является ли сообщение командой к боту
     if (msg.hasOwnProperty('entities') && msg.entities[0].type == 'bot_command') {
       let id_names = docsList.getRange(5, 1, docsList.getLastRow() - 4, 2).getValues();  // импорт таблицы табельных номеров и имён сотрудников из листа
       let ids = id_names.map(itm => String(itm[0]));      // айдишники из полного списка
       let names = id_names.map(itm => String(itm[1]));    // имена из полного списка
-      let svc2Values = svc2Sheet.getRange(1, 1, svc2Sheet.getLastRow() + 1, 3).getValues();   // стягиваем данные из таблицы подключенных чатов
+      let svc2Values = svc2Sheet.getRange(1, 1, svc2Sheet.getLastRow() + 1, 3).getValues();
       let chats = svc2Values.map(itm => String(itm[0]));  // чаты
-      let emptyLine = chats.indexOf('') == -1 ? chats.length : chats.indexOf(''); // первая свободная ячейка в листе чатов
+      let emptyLine = chats.indexOf('') == -1 ? chats.length : chats.indexOf(''); // первая свободная ячейка
       let chatLine = chats.indexOf(String(inputChatID)) != -1 ? chats.indexOf(String(inputChatID)) : emptyLine;
       let msg_txt = msg.text.split(' ');
       let header = '🤷 Ошибка!';
@@ -215,8 +217,8 @@ function sendMessage(header, body, chat_id) {
   };
 
   // и отправляем его боту
-  UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken + '/', data);
   console.log(('https://api.telegram.org/bot' + botToken + '/' + JSON.stringify(data)).length)
+  UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken + '/', data);
 
 };
 
@@ -552,12 +554,12 @@ function autoAlerts() {
       let headers = send[0];
       let bodies = send[1];
       header += headers[0]
+      if (headers[1] == '<ins><strong>👍 Отлично!</strong></ins>') { continue };
+      for (let j = 1; j < headers.length; j++) {
+        body += headers[j];
+        body += bodies[j];
+      };
       for (let num = 0; num < chatList.length; num++) {
-        if (headers[1] == '<ins><strong>👍 Отлично!</strong></ins>') { break };
-        for (let j = 1; j < headers.length; j++) {
-          body += headers[j];
-          body += bodies[j];
-        };
         sendMessage(header, body, chatList[num]);
       };
     };
