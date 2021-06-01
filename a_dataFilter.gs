@@ -1,3 +1,6 @@
+// Структура данных находится в гугл-таблице. Ссылка приложена в описании репозитория
+// Все указанные здесь переменные и функции находятся в области видимости бота, находящегося в файле b_BOT.gs
+
 /* Version 01.06.2021 13:00 */
 const ss = SpreadsheetApp.getActiveSpreadsheet()                  // получаем доступ  к активной таблице
 const personalList = ss.getSheetByName('Управление сотрудником'); //                  к листу с персональным списком
@@ -104,9 +107,6 @@ function importValues() {
 
   // ====================ОТПРАВКА ДАННЫХ В ТАБЛИЦУ====================
   // Чистим тело таблицы от данных
-  for (let i = 0; i < result.length; i++) {
-    Logger.log(result[i]);
-  }
   personalList.getRange(6, 2, personalList.getLastRow() - 4, 9).clearDataValidations().clearContent();
   personalList.getRange(result.length - 24, 2, 30, 1)
     .setDataValidation(SpreadsheetApp.newDataValidation()
