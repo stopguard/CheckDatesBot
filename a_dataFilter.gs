@@ -103,7 +103,7 @@ function importValues() {
     new Date(Date.now()).getMonth(),
     new Date(Date.now()).getDate());
 
-  let result = arrayGen(dateListValues, personalID, toDay);                                         // получаем список имущества
+  let result = arrayGen(dateListValues, personalID, toDay).flat();                                         // получаем список имущества
 
   // ====================ОТПРАВКА ДАННЫХ В ТАБЛИЦУ====================
   // Чистим тело таблицы от данных
@@ -175,7 +175,7 @@ function arrayGen(dateListValues, personalID, toDay) {
         break;
     };
   };
-  result = ended.concat(nearest, near, other, add)
+  result = [ended, nearest, near, other, add]
 
   return result;
 };
@@ -212,4 +212,4 @@ function exportValues() {
 
   personalList.getRange(4, 11).setValue('Выполнить?');
 }
-//*/
+// */
