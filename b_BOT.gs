@@ -1,53 +1,51 @@
-const svcSheet = ss.getSheetByName('[svc]');
-const svc2Sheet = ss.getSheetByName('[svc]2');
-const botToken = '1775200394:AAGYDccjkESNhsIdSafAgGbBka-_ZtiS1Yg';  // данный токен уже недействителен. если будет интересно могу организовать.
-const defaultObj = JSON.stringify({ 'id': '', 'name': '', 'str': -1, 'added': {} });
-const defaultAdded = JSON.stringify({ 'id': '', 'name': '', 'str': -1 });
-const emodjiDict = { 'Удостоверение)': '📃', 'Аттестация)': '🖋', 'Инструмент)': '🛠' };
+const botToken = '1736476926:AAEFRmIsqE2RY4Y2u6ZpKEPMOHf9paCEBCY';
+const webAppUrl = "https://script.google.com/macros/s/AKfycbx0RhclaWL3DN_wgkptrU8_oWwDyzx0s7jM0BctFU8_vxNHKjKeRq-n-_SnO2ZiTr6Nfg/exec";
+
+/* Version 02.06.2021 23:50 */
+const autoLists = ss.getSheetByName('[svc]AutoLists')                                     // получаем доступ  к сервисному листу
+const botDataList = ss.getSheetByName('[svc]BOT').getRange(1, 2, 2);                      //                  к диапазону подписчиков бота
+const defaultObj = JSON.stringify({ 'id': '', 'added': [] });
+const emodjiDict = { 'Удостоверение': '📃', 'Инструмент': '🛠' };
+
+function setWebhook() {
+  const telegramUrl = "https://api.telegram.org/bot" + botToken;
+  const url = telegramUrl + "/setWebhook?url=" + webAppUrl;
+  Logger.log(UrlFetchApp.fetch(url));
+}
 
 function doPost(e) {
   // получаем сигнал от бота
   let update = JSON.parse(e.postData.contents);
+  console.log(update.message)
   alertBOT(update);
 };
 
-function setWebhook() {
-  // одноразовая функция для подключения хуков
-  const webAppUrl = "https://script.google.com/macros/s/AKfycbxHbBTo3wJ-5sk7zIEfqxsbF3BeEhpypC53RfQXGDJOnZDUk4__QhOvfpc6X33egKnL1g/exec";
-  const telegramUrl = "https://api.telegram.org/bot" + botToken; 
-  const url = telegramUrl + "/setWebhook?url=" + webAppUrl;
-  let response = UrlFetchApp.fetch(url);
-  console.log(response)
-}
-
 function alertBOT(update) {
-
   // проверяем тип полученного, нам нужен только тип "сообщение"
   if (update.hasOwnProperty('message')) {
     let msg = update.message;
     let inputChatID = msg.chat.id;
-    Logger.log(inputChatID)
+    Logger.log(parseInt(inputChatID, 10))
     Logger.log(msg)
     // проверяем, является ли сообщение командой к боту
     if (msg.hasOwnProperty('entities') && msg.entities[0].type == 'bot_command') {
-      let id_names = docsList.getRange(5, 1, docsList.getLastRow() - 4, 2).getValues();  // импорт таблицы табельных номеров и имён сотрудников из листа
-      let ids = id_names.map(itm => String(itm[0]));      // айдишники из полного списка
-      let names = id_names.map(itm => String(itm[1]));    // имена из полного списка
-      let svc2Values = svc2Sheet.getRange(1, 1, svc2Sheet.getLastRow() + 1, 3).getValues();
-      let chats = svc2Values.map(itm => String(itm[0]));  // чаты
-      let emptyLine = chats.indexOf('') == -1 ? chats.length : chats.indexOf(''); // первая свободная ячейка
-      let chatLine = chats.indexOf(String(inputChatID)) != -1 ? chats.indexOf(String(inputChatID)) : emptyLine;
+      let id_names = customList.getRange(2, 1, customList.getLastRow() - 1, 2).getValues();  // импорт таблицы табельных номеров и имён сотрудников из листа
+      let idNamesObj = {};
+      id_names.forEach(el => idNamesObj[el[0]] = el[1]);
+      let botData = botDataList.getValues().flat();
+      let chats = JSON.parse(botData[0]);           // чаты
+      let attentionLists = JSON.parse(botData[1]);  // списки оповещений
       let msg_txt = msg.text.split(' ');
       let header = '🤷 Ошибка!';
       let body = `Сотрудник с табельным номером ${msg_txt[1]} не найден.\n` +
         `Воспользуйтесь помощью @corpUfanetbot для поиска верного табельного номера и укажите его рядом с командой\n(например ${msg_txt[0]} 1234)`;
-      let idLine = msg_txt.length > 1 ? ids.indexOf(msg_txt[1]) : -1;
+      let existsID = msg_txt.length > 1 && idNamesObj.hasOwnProperty(msg_txt[1]); // бывший номер строки айди
       // проверяем на название команды
-      let data;
+      let id;
+      let fullName;
       let chatObj;
       let personalID;
-      let toDay;
-      let docsListValues;
+      let dateListValues;
       let send;
       let headers = '';
       let bodies = '';
@@ -60,44 +58,46 @@ function alertBOT(update) {
             '/delmi - Для отключения оповещений о своём инструменте и удостоверениях\n\n' +
             '/del - Для очистки списка дополнительных табельных номеров для оповещений, добавьте табельный номер если хотите удалить один\n(например /del 1234)\n\n' +
             '/attentions - Для получения списка приближающихся к просрочке проверок знаний и инструмента\n\n' +
-            '/docs - Для просмотра сроков имеющихся удостоверений\n\n' +
-            '/instr - Для просмотра сроков имеющегося инструмента\n\n' +
             '/sum - Для просмотра сроков всего что есть в наличии, для просмотра чужих данных укажите табельный номер\n(например /sum 1234)\n\n' +
             '/list - Для просмотра списка подключенных оповещений';
           break;
         case '/my':
-          if (msg_txt.length > 1 && idLine >= 0) {
-            my(inputChatID, ids[idLine], names[idLine], idLine, chatLine);
+          if (msg_txt.length > 1 && existsID) {
+            id = msg_txt[1];
+            fullName = idNamesObj[id];
+            my(inputChatID, id, chats, attentionLists);
             header = '📜 Успешно!';
-            body = `В качестве основного табельного номера выбран ${ids[idLine]} (<strong>${names[idLine]}</strong>).\n` +
+            body = `В качестве основного табельного номера выбран ${id} (<strong>${fullName}</strong>).\n` +
               `Теперь вам будут приходить оповещения о приближении сроков поверок по этому сотруднику.`;
-            break;
           };
           break;
         case '/add':
-          if (msg_txt.length > 1 && idLine >= 0) {
-            add(inputChatID, ids[idLine], names[idLine], idLine, chatLine);
+          if (msg_txt.length > 1 && existsID) {
+            id = msg_txt[1];
+            fullName = idNamesObj[id];
+            add(inputChatID, id, chats, attentionLists);
             header = '🔔 Успешно!';
-            body = `Табельный номер ${ids[idLine]} (<strong>${names[idLine]}</strong>) добавлен в список отслеживаемых.\n` +
+            body = `Табельный номер ${id} (<strong>${fullName}</strong>) добавлен в список отслеживаемых.\n` +
               `Теперь вам будут приходить оповещения о приближении сроков поверок по этому сотруднику.`;
-            break;
           };
           break;
         case '/delmi':
-          delmi(inputChatID, chatLine);
+          delmi(inputChatID, chats, attentionLists);
           header = '🗑 Успешно!';
           body = `Основной табельный номер очищен.\n` +
             `Вам больше не будут приходить уведомления о нём.`;
           break;
         case '/del':
-          if (msg_txt.length > 1 && idLine >= 0) {
-            delID(inputChatID, ids[idLine], idLine, chatLine);
-            header = '🔕 Успешно!';
-            body = `Табельный номер ${ids[idLine]} (<strong>${names[idLine]}</strong>) удалён из списка отслеживаемых.\n` +
-              `Вам больше не будут приходить уведомления о нём.`;
+          chatObj = chats.hasOwnProperty(inputChatID) ? chats[inputChatID] : JSON.parse(defaultObj)
+          if (msg_txt.length > 1 && chatObj.added.includes(msg_txt[1])) {
+            id = msg_txt[1];
+            fullName = idNamesObj[id];
+            let delResult = delID(inputChatID, id, fullName, chats, attentionLists);
+            header = delResult[0];
+            body = delResult[1];
             break;
           } else if (msg_txt.length == 1) {
-            delAllAdded(inputChatID, chatLine);
+            delAllAdded(inputChatID, chats, attentionLists);
             header = '🔇 Успешно!';
             body = `Список дополнительных отслеживаемых табельных номеров очищен.\n` +
               `Вам больше не будут приходить уведомления о них.`;
@@ -107,72 +107,40 @@ function alertBOT(update) {
             `Воспользуйтесь командой /list для поиска табельного номера и укажите его рядом с командой\n(например ${msg_txt[0]} 1234).`;
           break;
         case '/attentions':
-          data = svc2Sheet.getRange(chatLine + 1, 2).getValue();
-          chatObj = data == '' ? JSON.parse(defaultObj) : JSON.parse(data);
-          personalID = [chatObj.name, chatObj.id, chatObj.str + 4];
-          toDay = personalList.getRange(4, 5).getValue();                                                             // забираем из ячейки текущую дату
-          docsListValues = docsList.getRange(1, 1, docsList.getLastRow(), docsList.getLastColumn()).getValues();      // получаем значения с листа удостоверений
-          instrListValues = instrList.getRange(1, 1, instrList.getLastRow(), instrList.getLastColumn()).getValues();  //                           инструмента
-          send = attentions(personalID, toDay, docsListValues, instrListValues);
-          headers = send[0];
-          bodies = send[1];
-          header = headers[0]
-          body = bodies[0]
-          for (let i = 1; i < headers.length; i++) {
-            body += headers[i];
-            body += bodies[i];
-          };
-          sendMessage(header, body, inputChatID);
-          header = 0;
-          break;
-        case '/docs':
-          data = svc2Sheet.getRange(chatLine + 1, 2).getValue();
-          chatObj = data == '' ? JSON.parse(defaultObj) : JSON.parse(data);
-          personalID = [chatObj.name, chatObj.id, chatObj.str + 4]
-          toDay = personalList.getRange(4, 5).getValue();                                                             // забираем из ячейки текущую дату
-          docsListValues = docsList.getRange(1, 1, docsList.getLastRow(), docsList.getLastColumn()).getValues();      // получаем значения с листа удостоверений
-          send = docs(personalID, toDay, docsListValues);
-          headers = send[0];
-          bodies = send[1];
-          header = headers[0]
-          body = bodies[0]
-          for (let i = 1; i < headers.length; i++) {
-            body += headers[i];
-            body += bodies[i];
-          };
-          sendMessage(header, body, inputChatID);
-          header = 0;
-          break;
-        case '/instr':
-          data = svc2Sheet.getRange(chatLine + 1, 2).getValue();
-          chatObj = data == '' ? JSON.parse(defaultObj) : JSON.parse(data);
-          personalID = [chatObj.name, chatObj.id, chatObj.str + 4]
-          toDay = personalList.getRange(4, 5).getValue();                                                             // забираем из ячейки текущую дату
-          instrListValues = instrList.getRange(1, 1, instrList.getLastRow(), instrList.getLastColumn()).getValues();  // получаем значения с листа инструмента
-          send = instr(personalID, toDay, instrListValues);
-          headers = send[0];
-          bodies = send[1];
-          header = headers[0]
-          body = bodies[0]
-          for (let i = 1; i < headers.length; i++) {
-            body += headers[i];
-            body += bodies[i];
-          };
+          chatObj = chats.hasOwnProperty(inputChatID) ? chats[inputChatID] : JSON.parse(defaultObj);
+          id = chatObj.id
+          fullName = idNamesObj.hasOwnProperty(id) ? idNamesObj[id] : ""
+          if (id != "" && fullName != "") {
+            dateListValues = dateList.getRange(3, 6, dateList.getLastRow() - 2, 8).getValues();         // получаем значения с листа дат
+            personalID = `${fullName} | ${id}`;
+            send = attentions(dateListValues, personalID);
+            headers = send[0];
+            bodies = send[1];
+            header = headers[0]
+            body = bodies[0]
+            for (let i = 1; i < headers.length; i++) {
+              body += headers[i];
+              body += bodies[i];
+            };
+          } else {
+            header = '⛔ Ошибка!';
+            body = 'Не выбран основной табельный номер. Воспользуйтесь командой /my для выбора основного табельного номера.';
+          }
           sendMessage(header, body, inputChatID);
           header = 0;
           break;
         case '/sum':
-          data = svc2Sheet.getRange(chatLine + 1, 2).getValue();
-          chatObj = data == '' ? JSON.parse(defaultObj) : JSON.parse(data);
-          if (msg_txt.length > 1 && idLine >= 0) {
-            personalID = [names[idLine], msg_txt[1], idLine + 4];
+          if (msg_txt.length > 1 && existsID) {
+            id = msg_txt[1];
+            fullName = idNamesObj[id]
           } else if (msg_txt.length == 1) {
-            personalID = [chatObj.name, chatObj.id, chatObj.str + 4];
+            chatObj = chats.hasOwnProperty(inputChatID) ? chats[inputChatID] : JSON.parse(defaultObj);
+            id = chatObj.id
+            fullName = idNamesObj.hasOwnProperty(id) ? idNamesObj[id] : ""
           } else { break };
-          toDay = personalList.getRange(4, 5).getValue();                                                             // забираем из ячейки текущую дату
-          docsListValues = docsList.getRange(1, 1, docsList.getLastRow(), docsList.getLastColumn()).getValues();      // получаем значения с листа удостоверений
-          instrListValues = instrList.getRange(1, 1, instrList.getLastRow(), instrList.getLastColumn()).getValues();  //                           инструмента
-          send = summInf(personalID, toDay, docsListValues, instrListValues);
+          personalID = `${fullName} | ${id}`;
+          dateListValues = dateList.getRange(3, 6, dateList.getLastRow() - 2, 8).getValues();         // получаем значения с листа дат
+          send = summInf(dateListValues, personalID);
           headers = send[0];
           bodies = send[1];
           header = headers[0]
@@ -186,7 +154,7 @@ function alertBOT(update) {
           break;
         case '/list':
           header = '🗃 Список оповещений:';
-          body = list(chatLine);
+          body = list(inputChatID, chats, idNamesObj);
           break;
         default:
           header = '🤷 Ошибка!';
@@ -221,150 +189,155 @@ function sendMessage(header, body, chat_id) {
   UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken + '/', data);
 
 };
-
-function my(chat, id, name, idLine, chatLine) {
+function my(chat, id, chatsObj, notifyObj) {
   // функция для добавления основного табельного номера в таблицу
-  let data = svc2Sheet.getRange(1, 1, Math.max(svc2Sheet.getLastRow(), idLine + 1, chatLine + 1), 3).getValues();
-  let cpData = JSON.stringify(data);
-  let chatObj = data[chatLine][1] == '' ? JSON.parse(defaultObj) : JSON.parse(data[chatLine][1]);
-  let idObj = data[idLine][2] == '' ? {} : JSON.parse(data[idLine][2]);
-  let oldIDObj = chatObj.str >= 0 ? JSON.parse(data[chatObj.str][2]) : {};
-  if (chatObj.id != id) {
-    if (JSON.stringify(oldIDObj) != '{}') {
-      delete oldIDObj[chat];
-      delete chatObj.added[chatObj.id];
-      data[chatObj.str][2] = JSON.stringify(oldIDObj);
-    };
-    delete chatObj.added[id];
-    chatObj.id = id;
-    chatObj.name = name;
-    chatObj.str = idLine;
-    data[chatLine][0] = chat;
-    data[chatLine][1] = JSON.stringify(chatObj);
+  let cpChatsObj = JSON.stringify(chatsObj);
+  let cpNotifyObj = JSON.stringify(notifyObj);
+  let chatObj = chatsObj.hasOwnProperty(chat) ? chatsObj[chat] : JSON.parse(defaultObj);
+  let notifyList = notifyObj.hasOwnProperty(id) ? notifyObj[id] : [];
+  if (notifyObj.hasOwnProperty(chatObj.id)) {
+    notifyObj[chatObj.id] = notifyObj[chatObj.id].filter(el => el != chat);
+    if (notifyObj[chatObj.id].length == 0) { delete notifyObj[chatObj.id] }
   }
-  idObj[chat] = chat;
-  data[idLine][2] = JSON.stringify(idObj);
-  if (JSON.stringify(data) != cpData) {
-    svc2Sheet.getRange(1, 1, data.length, 3).setValues(data);
+  chatObj.id = id;
+  chatObj.added = chatObj.added.filter(el => el != id);
+  chatsObj[chat] = chatObj;
+  if (!notifyList.includes(chat)) { notifyList.push(chat) };
+  notifyObj[id] = notifyList;
+  let strChatsObj = JSON.stringify(chatsObj);
+  let strNotifyObj = JSON.stringify(notifyObj);
+  if (strChatsObj != cpChatsObj || strNotifyObj != cpNotifyObj) {
+    botDataList.setValues([[strChatsObj], [strNotifyObj]]);
   };
 };
 
-function add(chat, id, name, idLine, chatLine) {
+function add(chat, id, chatsObj, notifyObj) {
   // функция для добавления дополнительного табельного номера в таблицу
-  let data = svc2Sheet.getRange(1, 1, Math.max(svc2Sheet.getLastRow(), idLine + 1, chatLine + 1), 3).getValues();
-  let cpData = JSON.stringify(data);
-  let chatObj = data[chatLine][1] == '' ? JSON.parse(defaultObj) : JSON.parse(data[chatLine][1]);
-  let idObj = data[idLine][2] == '' ? {} : JSON.parse(data[idLine][2]);
-  if (chatObj.id != id) {
-    chatObj.added[id] = JSON.parse(defaultAdded);
-    chatObj.added[id].id = id;
-    chatObj.added[id].name = name;
-    chatObj.added[id].str = idLine;
-    data[chatLine][0] = chat;
-    data[chatLine][1] = JSON.stringify(chatObj);
-    idObj[chat] = chat;
-    data[idLine][2] = JSON.stringify(idObj);
-    if (JSON.stringify(data) != cpData) {
-      svc2Sheet.getRange(1, 1, data.length, 3).setValues(data);
-    };
+  let cpChatsObj = JSON.stringify(chatsObj);
+  let cpNotifyObj = JSON.stringify(notifyObj);
+  let chatObj = chatsObj.hasOwnProperty(chat) ? chatsObj[chat] : JSON.parse(defaultObj);
+  let notifyList = notifyObj.hasOwnProperty(id) ? notifyObj[id] : [];
+  if (chatObj.id != id && !chatObj.added.includes(id)) { chatObj.added.push(id) };
+  chatsObj[chat] = chatObj;
+  if (!notifyList.includes(chat)) { notifyList.push(chat) };
+  notifyObj[id] = notifyList;
+  let strChatsObj = JSON.stringify(chatsObj);
+  let strNotifyObj = JSON.stringify(notifyObj);
+  if (strChatsObj != cpChatsObj || strNotifyObj != cpNotifyObj) {
+    botDataList.setValues([[strChatsObj], [strNotifyObj]]);
   };
 };
 
-function delmi(chat, chatLine) {
+function delmi(chat, chatsObj, notifyObj) {
   // функция для удаления основного табельного номера в таблице
-  let data = svc2Sheet.getRange(1, 1, svc2Sheet.getLastRow(), 3).getValues();
-  let cpData = JSON.stringify(data);
-  let chatObj = data[chatLine][1] == '' ? JSON.parse(defaultObj) : JSON.parse(data[chatLine][1]);
-  let oldIDObj = chatObj.str >= 0 ? JSON.parse(data[chatObj.str][2]) : {};
-  if (chatObj.id != '') {
-    delete oldIDObj[chat];
-    delete chatObj.added[chatObj.id];
-    data[chatObj.str][2] = JSON.stringify(oldIDObj);
-    chatObj.id = '';
-    chatObj.name = '';
-    chatObj.str = -1;
-    data[chatLine][0] = chat;
-    data[chatLine][1] = JSON.stringify(chatObj);
+  let cpChatsObj = JSON.stringify(chatsObj);
+  let cpNotifyObj = JSON.stringify(notifyObj);
+  let chatObj = chatsObj.hasOwnProperty(chat) ? chatsObj[chat] : JSON.parse(defaultObj);
+  let id = chatObj.id
+  let notifyList = notifyObj.hasOwnProperty(id) ? notifyObj[id] : [];
+
+  chatObj.id = '';
+  if (chatObj.added.length == 0) {
+    delete chatsObj[chat]
+  } else {
+    chatsObj[chat] = chatObj
   };
-  if (data[chatLine][1] == defaultObj) {
-    data[chatLine][0] = '';
-    data[chatLine][1] = '';
+
+  notifyList = notifyList.filter(el => el != chat);
+  if (notifyList.length == 0) {
+    delete notifyObj[id]
+  } else {
+    notifyObj[id] = notifyList
   };
-  if (JSON.stringify(data) != cpData) {
-    svc2Sheet.getRange(1, 1, data.length, 3).setValues(data);
+
+  let strChatsObj = JSON.stringify(chatsObj);
+  let strNotifyObj = JSON.stringify(notifyObj);
+  if (strChatsObj != cpChatsObj || strNotifyObj != cpNotifyObj) {
+    botDataList.setValues([[strChatsObj], [strNotifyObj]]);
   };
 };
 
-function delID(chat, addedID, idLine, chatLine) {
+function delID(chat, id, name, chatsObj, notifyObj) {
   // функция для удаления ID из отслеживаемых табельных номеров в таблице
-  let data = svc2Sheet.getRange(1, 1, svc2Sheet.getLastRow(), 3).getValues();
-  let cpData = JSON.stringify(data);
-  let chatObj = data[chatLine][1] == '' ? JSON.parse(defaultObj) : JSON.parse(data[chatLine][1]);
-  let idObj = data[idLine][2] == '' ? {} : JSON.parse(data[idLine][2]);
-  if (JSON.stringify(chatObj.added) != '{}') {
-    if (addedID != chatObj.id) {
-      delete idObj[chat];
-    };
-    delete chatObj.added[addedID];
-    data[chatLine][0] = chat;
-    data[chatLine][1] = JSON.stringify(chatObj);
+  let header;
+  let body;
+  let cpChatsObj = JSON.stringify(chatsObj);
+  let cpNotifyObj = JSON.stringify(notifyObj);
+  let chatObj = chatsObj.hasOwnProperty(chat) ? chatsObj[chat] : JSON.parse(defaultObj);
+  let notifyList = notifyObj.hasOwnProperty(id) ? notifyObj[id] : [];
+
+  notifyList = chatObj.id != id ? notifyList.filter(el => el != chat) : notifyList;
+  if (notifyList.length == 0) {
+    delete notifyObj[id]
+  } else {
+    notifyObj[id] = notifyList
   };
-  data[idLine][2] = JSON.stringify(idObj);
-  if (data[chatLine][1] == defaultObj) {
-    data[chatLine][0] = '';
-    data[chatLine][1] = '';
+
+  chatObj.added = chatObj.added.filter(el => el != id)
+  if (chatObj.added.length == 0 && chatObj.id == '') {
+    delete chatsObj[chat]
+  } else {
+    chatsObj[chat] = chatObj
   };
-  if (JSON.stringify(data) != cpData) {
-    svc2Sheet.getRange(1, 1, data.length, 3).setValues(data);
+
+  let strChatsObj = JSON.stringify(chatsObj);
+  let strNotifyObj = JSON.stringify(notifyObj);
+  if (strChatsObj != cpChatsObj || strNotifyObj != cpNotifyObj) {
+    botDataList.setValues([[strChatsObj], [strNotifyObj]]);
+    header = '🔕 Успешно!';
+    body = `Табельный номер ${id} (<strong>${name}</strong>) удалён из списка отслеживаемых.\n` +
+      `Вам больше не будут приходить уведомления о нём.`;
+  } else {
+    header = '🤷 Ошибка!';
+    body = `Сотрудник с табельным номером ${id} не найден в списке добавленных.\n` +
+      `Воспользуйтесь помощью /list для поиска верного табельного номера и укажите его рядом с командой\n` +
+      `(например /del 1234)\n` +
+      `Если вы хотите удалить основной табельный номер, воспользуйтесь командой /delmi.`;
   };
+  return [header, body]
 };
 
-function delAllAdded(chat, chatLine) {
+function delAllAdded(chat, chatsObj, notifyObj) {
   // функция для очистки списка отслеживаемых табельных номеров в таблице
-  let data = svc2Sheet.getRange(1, 1, svc2Sheet.getLastRow(), 3).getValues();
-  let cpData = JSON.stringify(data);
-  let chatObj = data[chatLine][1] == '' ? JSON.parse(defaultObj) : JSON.parse(data[chatLine][1]);
-  if (JSON.stringify(chatObj.added) != '{}') {
-    let chatObjTmp = JSON.parse(JSON.stringify(chatObj));
-    for (let idInAdded in chatObj.added) {
-      let idObjInAdded = chatObj.added[idInAdded];
-      Logger.log(JSON.stringify(idObjInAdded));
-      let idObj = JSON.parse(data[idObjInAdded.str][2]);
-      if (idObjInAdded.id != chatObj.id) {
-        delete idObj[chat];
-      };
-      delete chatObjTmp.added[idObjInAdded.id];
-      data[idObjInAdded.str][2] = JSON.stringify(idObj);
+  let cpChatsObj = JSON.stringify(chatsObj);
+  let cpNotifyObj = JSON.stringify(notifyObj);
+  let chatObj = chatsObj.hasOwnProperty(chat) ? chatsObj[chat] : JSON.parse(defaultObj);
+
+  for (let id of chatObj.added) {
+    notifyObj[id] = notifyObj[id].filter(el => el != chat);
+    if (notifyObj[id].length == 0) {
+      delete notifyObj[id]
     };
-    data[chatLine][0] = chat;
-    data[chatLine][1] = JSON.stringify(chatObjTmp);
+  }
+
+  chatObj.added = []
+  if (chatObj.id == '') {
+    delete chatsObj[chat]
+  } else {
+    chatsObj[chat] = chatObj
   };
-  if (data[chatLine][1] == defaultObj) {
-    data[chatLine][0] = '';
-    data[chatLine][1] = '';
-  };
-  if (JSON.stringify(data) != cpData) {
-    svc2Sheet.getRange(1, 1, data.length, 3).setValues(data);
-  };
+
+  let strChatsObj = JSON.stringify(chatsObj);
+  let strNotifyObj = JSON.stringify(notifyObj);
+  if (strChatsObj != cpChatsObj || strNotifyObj != cpNotifyObj) {
+    botDataList.setValues([[strChatsObj], [strNotifyObj]]);
+  }
 };
 
-
-
-function list(chatLine) {
+function list(chat, chatsObj, idNames) {
   // функция для просмотра списка отслеживаемых табельных номеров в таблице
-  let data = svc2Sheet.getRange(1, 1, svc2Sheet.getLastRow(), 3).getValues();
-  let chatObj = data[chatLine][1] == '' ? JSON.parse(defaultObj) : JSON.parse(data[chatLine][1]);
+  let chatObj = chatsObj.hasOwnProperty(chat) ? chatsObj[chat] : JSON.parse(defaultObj);
   let result = '';
   if (chatObj.id == '') {
     result = '⚠ Основной МОЛ не выбран.';
   } else {
-    result = `📜 <strong>Основной МОЛ</strong>\n✓ ${chatObj.name} | ${chatObj.id}`;
+    result = `📜 <strong>Основной МОЛ</strong>\n✓ ${idNames[chatObj.id]} | ${chatObj.id}`;
   };
-  if (JSON.stringify(chatObj.added) != '{}') {
+  if (chatObj.added.length != 0) {
     result += '\n\n🔔 <strong>Дополнительные МОЛы</strong>';
-    for (let idInAdded in chatObj.added) {
-      let idObjInAdded = chatObj.added[idInAdded];
-      result += `\n✓ ${idObjInAdded.name} | ${idObjInAdded.id}`;
+    for (let id of chatObj.added) {
+      if (!idNames.hasOwnProperty(id)) { continue };
+      result += `\n✓ ${idNames[id]} | ${id}`;
     };
   } else {
     result += `\n\n📭 Дополнительно никто не отслеживается.`;
@@ -372,19 +345,20 @@ function list(chatLine) {
   return result;
 };
 
-function attentions(personalID, toDay, docsListValues, instrListValues) {
-  let header = [`👷 ${personalID[0]} | ${personalID[1]}`];
+function attentions(data, personalID) {
+  let header = [`👷 ${personalID}`];
   let body = [''];
-  if (personalID[1] == '') {
+  let endDate;
+  if (personalID == '' || personalID == ' | ') {
     header[0] = '⛔ Ошибка!';
     body[0] = 'Не выбран основной табельный номер. Воспользуйтесь командой /my для выбора основного табельного номера.';
     return [header, body];
   };
-  let values = arrayGen(docsListValues, instrListValues, personalID, toDay);
+  let values = arrayGen(data, personalID);
   let ended = values[0];
-  let close = values[1];
-  if (ended.length == 1 && close.length == 1) {
-    header.push('<ins><strong>👍 Отлично!</strong></ins>');
+  let nearest = values[1];
+  if (ended.length == 1 && nearest.length == 1) {
+    header.push('<ins><strong>👍 Отлично!</strong></ins>\n');
     body.push('Удостоверений и СИЗ с истекающим сроком проверки не найдено!');
     return [header, body];
   };
@@ -392,120 +366,37 @@ function attentions(personalID, toDay, docsListValues, instrListValues) {
     header.push('\n<ins><strong>🛑 Просрочены:</strong></ins>\n');
     body.push('');
     for (let i = 1; i < ended.length; i++) {
-      let emodji = emodjiDict[ended[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${ended[i][1]}</strong>\n`;
+      let emodji = emodjiDict[ended[i][1]];
+      body[body.length - 1] += `<strong>${emodji} ${ended[i][2]}</strong>\n`;
     };
   };
-  if (close.length > 1) {
+  if (nearest.length > 1) {
     header.push('\n<ins><strong>⚠ Осталось до месяца:</strong></ins>\n');
     body.push('');
-    for (let i = 1; i < close.length; i++) {
-      let emodji = emodjiDict[close[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${close[i][1]}</strong> действует до ${close[i][3]}\n`;
+    for (let i = 1; i < nearest.length; i++) {
+      let emodji = emodjiDict[nearest[i][1]];
+      endDate = Utilities.formatDate(new Date(nearest[i][7]), "GMT+5", "dd.MM.yyyy")
+      body[body.length - 1] += `<strong>${emodji} ${nearest[i][2]}</strong> действует до ${endDate}\n`;
     };
   };
   return [header, body];
 };
 
-function docs(personalID, toDay, docsListValues) {
-  let header = [`👷 ${personalID[0]} | ${personalID[1]}`];
+function summInf(data, personalID) {
+  let header = [`👷 ${personalID}`];
   let body = [''];
-  if (personalID[1] == '') {
-    header[0] = '<strong>⛔ Ошибка!</strong>';
+  let endDate
+  if (personalID == '' || personalID == ' | ') {
+    header[0] = '⛔ Ошибка!';
     body[0] = 'Не выбран основной табельный номер. Воспользуйтесь командой /my для выбора основного табельного номера.';
     return [header, body];
   };
-  let values = arrayGen(docsListValues, [[]], personalID, toDay);
+  let values = arrayGen(data, personalID);
   let ended = values[0];
-  let close = values[1];
-  let ok = values[2];
-  if (ended.length == 1 && close.length == 1) {
-    header.push('<ins><strong>👍 Отлично!</strong></ins>\n');
-    body.push('Удостоверений с истекающим сроком проверки не найдено!\n');
-  };
-  if (ended.length > 1) {
-    header.push('\n<ins><strong>🛑 Просрочены:</strong></ins>\n');
-    body.push('');
-    for (let i = 1; i < ended.length; i++) {
-      let emodji = emodjiDict[ended[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${ended[i][1]}</strong>\n`;
-    };
-  };
-  if (close.length > 1) {
-    header.push('\n<ins><strong>⚠ Осталось до месяца:</strong></ins>\n');
-    body.push('');
-    for (let i = 1; i < close.length; i++) {
-      let emodji = emodjiDict[close[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${close[i][1]}</strong> действует до ${close[i][3]}\n`;
-    };
-  };
-  if (ok.length > 1) {
-    header.push('\n<ins><strong>✅ В норме:</strong></ins>\n');
-    body.push('');
-    for (let i = 1; i < ok.length; i++) {
-      let emodji = emodjiDict[ok[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${ok[i][1]}</strong> действует до ${ok[i][3]}\n`;
-    };
-  };
-  return [header, body];
-};
-
-function instr(personalID, toDay, instrListValues) {
-  let header = [`👷 ${personalID[0]} | ${personalID[1]}`];
-  let body = [''];
-  if (personalID[1] == '') {
-    header[0] = '<strong>⛔ Ошибка!</strong>';
-    body[0] = 'Не выбран основной табельный номер. Воспользуйтесь командой /my для выбора основного табельного номера.';
-    return [header, body];
-  };
-  let values = arrayGen([[]], instrListValues, personalID, toDay);
-  let ended = values[0];
-  let close = values[1];
-  let ok = values[2];
-  if (ended.length == 1 && close.length == 1) {
-    header.push('<ins><strong>👍 Отлично!</strong></ins>\n');
-    body.push('СИЗ с истекающим сроком проверки не найдено!\n');
-  };
-  if (ended.length > 1) {
-    header.push('\n<ins><strong>🛑 Просрочены:</strong></ins>\n');
-    body.push('');
-    for (let i = 1; i < ended.length; i++) {
-      let emodji = emodjiDict[ended[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${ended[i][1]}</strong>\n`;
-    };
-  };
-  if (close.length > 1) {
-    header.push('\n<ins><strong>⚠ Осталось до месяца:</strong></ins>\n');
-    body.push('');
-    for (let i = 1; i < close.length; i++) {
-      let emodji = emodjiDict[close[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${close[i][1]}</strong> действует до ${close[i][3]}\n`;
-    };
-  };
-  if (ok.length > 1) {
-    header.push('\n<ins><strong>✅ В норме:</strong></ins>\n');
-    body.push('');
-    for (let i = 1; i < ok.length; i++) {
-      let emodji = emodjiDict[ok[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${ok[i][1]}</strong> действует до ${ok[i][3]}\n`;
-    };
-  };
-  return [header, body];
-};
-
-function summInf(personalID, toDay, docsListValues, instrListValues) {
-  let header = [`👷 ${personalID[0]} | ${personalID[1]}`];
-  let body = [''];
-  if (personalID[1] == '') {
-    header[0] = '<strong>⛔ Ошибка!</strong>';
-    body[0] = 'Не выбран основной табельный номер. Воспользуйтесь командой /my для выбора основного табельного номера.';
-    return [header, body];
-  };
-  let values = arrayGen(docsListValues, instrListValues, personalID, toDay);
-  let ended = values[0];
-  let close = values[1];
-  let ok = values[2];
-  if (ended.length == 1 && close.length == 1) {
+  let nearest = values[1];
+  let near = values[2];
+  let ok = values[3];
+  if (ended.length == 1 && nearest.length == 1) {
     header.push('<ins><strong>👍 Отлично!</strong></ins>\n');
     body.push('Удостоверений и СИЗ с истекающим сроком проверки не найдено!\n');
   };
@@ -513,55 +404,135 @@ function summInf(personalID, toDay, docsListValues, instrListValues) {
     header.push('\n<ins><strong>🛑 Просрочены:</strong></ins>\n');
     body.push('');
     for (let i = 1; i < ended.length; i++) {
-      let emodji = emodjiDict[ended[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${ended[i][1]}</strong>\n`;
+      let emodji = emodjiDict[ended[i][1]];
+      body[body.length - 1] += `<strong>${emodji} ${ended[i][2]}</strong>\n`;
     };
   };
-  if (close.length > 1) {
+  if (nearest.length > 1) {
     header.push('\n<ins><strong>⚠ Осталось до месяца:</strong></ins>\n');
     body.push('');
-    for (let i = 1; i < close.length; i++) {
-      let emodji = emodjiDict[close[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${close[i][1]}</strong> действует до ${close[i][3]}\n`;
+    for (let i = 1; i < nearest.length; i++) {
+      let emodji = emodjiDict[nearest[i][1]];
+      endDate = Utilities.formatDate(new Date(nearest[i][7]), "GMT+5", "dd.MM.yyyy")
+      body[body.length - 1] += `<strong>${emodji} ${nearest[i][2]}</strong> действует до ${endDate}\n`;
     };
   };
-  if (ok.length > 1) {
+  if ((ok.length + near.length) > 1) {
     header.push('\n<ins><strong>✅ В норме:</strong></ins>\n');
     body.push('');
+    for (let i = 1; i < near.length; i++) {
+      let emodji = emodjiDict[near[i][1]];
+      endDate = Utilities.formatDate(new Date(near[i][7]), "GMT+5", "dd.MM.yyyy")
+      body[body.length - 1] += `<strong>${emodji} ${near[i][2]}</strong> действует до ${endDate}\n`;
+    };
     for (let i = 1; i < ok.length; i++) {
-      let emodji = emodjiDict[ok[i][1].split('(')[1]];
-      body[body.length - 1] += `<strong>${emodji} ${ok[i][1]}</strong> действует до ${ok[i][3]}\n`;
+      let emodji = emodjiDict[ok[i][1]];
+      endDate = Utilities.formatDate(new Date(ok[i][7]), "GMT+5", "dd.MM.yyyy")
+      body[body.length - 1] += `<strong>${emodji} ${ok[i][2]}</strong> действует до ${endDate}\n`;
     };
   };
   return [header, body];
 };
 
 function autoAlerts() {
-  let id_names = docsList.getRange(5, 1, docsList.getLastRow() - 4, 2).getValues();  // импорт таблицы табельных номеров и имён сотрудников из листа
-  let ids = id_names.map(itm => String(itm[0]));      // айдишники из полного списка
-  let names = id_names.map(itm => String(itm[1]));    // имена из полного списка
-  let toDay = personalList.getRange(4, 5).getValue();                                                             // забираем из ячейки текущую дату
-  let docsListValues = docsList.getRange(1, 1, docsList.getLastRow(), docsList.getLastColumn()).getValues();      // получаем значения с листа удостоверений
-  let instrListValues = instrList.getRange(1, 1, instrList.getLastRow(), instrList.getLastColumn()).getValues();  //                           инструмента
-  let svc2Values = svc2Sheet.getRange(1, 3, svc2Sheet.getLastRow(), 1).getValues().map(itm => String(itm[0]));
-  for (let i = 0; i < svc2Values.length; i++) {
-    let header = '';
-    let body = '';
-    if (svc2Values[i] != '' && svc2Values[i] != '{}') {
-      let chatList = Object.keys(JSON.parse(svc2Values[i]));
-      let personalID = [names[i], ids[i], i + 4];
-      let send = attentions(personalID, toDay, docsListValues, instrListValues);
-      let headers = send[0];
-      let bodies = send[1];
-      header += headers[0]
-      if (headers[1] == '<ins><strong>👍 Отлично!</strong></ins>') { continue };
-      for (let j = 1; j < headers.length; j++) {
-        body += headers[j];
-        body += bodies[j];
-      };
-      for (let num = 0; num < chatList.length; num++) {
-        sendMessage(header, body, chatList[num]);
-      };
+  // функция для автоматического оповещения всех подключенных к боту пользователей о просроченных или близких к просрочке инструментах и удостоверениях сотрудников
+  // у каждого пользователя свой список отслеживаемых сотрудников - оповещения приходят только об имеющихся в списке сотрудниках
+  let id_names = customList.getRange(2, 1, customList.getLastRow() - 1, 2).getValues();  // импорт таблицы табельных номеров и имён сотрудников из листа
+  let idNamesObj = {};
+  id_names.forEach(el => idNamesObj[el[0]] = el[1]);
+  let botData = botDataList.getValues().flat();
+  let chats = JSON.parse(botData[0]);           // чаты
+  let attentionLists = JSON.parse(botData[1]);  // списки оповещений
+
+  let dateListValues = autoCleaner(idNamesObj, chats, attentionLists);
+
+  let header;
+  let body;
+  let chatList;
+  let fullName;
+  let personalID;
+  let send;
+  let headers;
+  let bodies;
+  for (let id in attentionLists) {
+    if (!idNamesObj.hasOwnProperty(id)) { continue };
+    header = '';
+    body = '';
+    chatList = attentionLists[id];
+    fullName = idNamesObj[id]
+    personalID = `${fullName} | ${id}`;
+    send = attentions(dateListValues, personalID);
+    headers = send[0];
+    if (headers[1] == '<ins><strong>👍 Отлично!</strong></ins>\n') { continue };
+    bodies = send[1];
+    header = headers[0]
+    body = bodies[0]
+    for (let i = 1; i < headers.length; i++) {
+      body += headers[i];
+      body += bodies[i];
+    };
+    for (let num of chatList) {
+      sendMessage(header, body, num);
     };
   };
 };
+
+function autoCleaner(idNames = 0, chats = 0, attentionLists = 0) {
+  // очистка таблицы от записей о людях отсутствующих в списке сотрудников
+  if (idNames === 0 || chats === 0 || attentionLists === 0) {
+    id_names = customList.getRange(2, 1, customList.getLastRow() - 1, 2).getValues();  // импорт таблицы табельных номеров и имён сотрудников из листа
+    idNames = {};
+    id_names.forEach(el => idNames[el[0]] = el[1]);
+    botData = botDataList.getValues().flat();
+    chats = JSON.parse(botData[0]);           // чаты
+    attentionLists = JSON.parse(botData[1]);  // списки оповещений
+  }
+  let data = dateList.getRange(3, 4, dateList.getLastRow() - 2, 10).getValues();         // получаем значения с листа дат
+  let newData = [];
+  let toExitData = []
+  for (let line of data) {
+    id = line[0]
+    if (idNames.hasOwnProperty(id)) {
+      newData.push(line);
+      toExitData.push(line.slice(2))
+    } else {
+      newData.push(["", "", "", "", "", "", "", "", "", ""])
+    }
+  }
+
+  if (JSON.stringify(data) != JSON.stringify(newData)) {
+    newData = newData.map(el => el.slice(2, 8));
+    dateList.getRange(3, 6, newData.length, 6).setValues(newData);
+  }
+
+  let cpAttentionLists = JSON.parse(JSON.stringify(attentionLists));
+  let cpChats = JSON.stringify(chats);
+  let chatObj;
+  for (let id in cpAttentionLists) {
+    if (!idNames.hasOwnProperty(id)) {
+      for (let chat of attentionLists[id]) {
+        chatObj = chats[chat]
+        if (chatObj.id == id) {
+          chatObj.id = ''
+        } else {
+          chatObj.added = chatObj.added.filter(el => el != id)
+        }
+        if (chatObj.added.length == 0 && chatObj.id == '') {
+          delete chats[chat]
+        } else {
+          chats[chat] = chatObj
+        };
+      }
+      delete attentionLists[id]
+    }
+  }
+  let strAttentionsLists = JSON.stringify(attentionLists)
+  let strChats = JSON.stringify(chats)
+  if(JSON.stringify(cpAttentionLists) != strAttentionsLists || cpChats != strChats) {
+    newData = [[strChats], [strAttentionsLists]];
+    botDataList.setValues(newData);
+  }
+
+  return toExitData
+}
+// */
