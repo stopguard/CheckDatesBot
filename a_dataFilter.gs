@@ -1,11 +1,11 @@
 // Структура данных находится в гугл-таблице. Ссылка приложена в описании репозитория
 // Все указанные здесь переменные и функции находятся в области видимости бота, находящегося в файле b_BOT.gs
 
-/* Version 01.06.2021 13:00 */
+/* Version 02.06.2021 23:50 */
 const ss = SpreadsheetApp.getActiveSpreadsheet()                  // получаем доступ  к активной таблице
-const personalList = ss.getSheetByName('Управление сотрудником'); //                  к листу с персональным списком
-const dateList = ss.getSheetByName('Даты проверок');              //                  к листу удостоверений
-const customList = ss.getSheetByName('Списки');                   //                  к листу инструмента
+const personalList = ss.getSheetByName('Управление сотрудником'); //                  к персональному листу
+const dateList = ss.getSheetByName('Даты проверок');              //                  к листу с датами
+const customList = ss.getSheetByName('Списки');                   //                  к листу со списками
 const msToDays = 86400000                                         // переменная для перевода миллисекунд в дни
 
 function onEdit() {
@@ -20,16 +20,16 @@ function onEdit() {
     // Автозаполнение даты проверки знаний при изменении даты обновления удостоверения
     switch (cellcol) {
       case 10:
-        sheet.getRange(index, cellcol + 1).setValue(active.getValue());
+        dateList.getRange(index, cellcol + 1).setValue(active.getValue());
         break;
       case 11:
-        let str = sheet.getRange(index, 10, 1, 4).getValues().flat(1);
+        let str = dateList.getRange(index, 10, 1, 4).getValues().flat(1);
         let checkDate = new Date(str[0]);
         let attestationDate = new Date(str[1]);
         let nextCheckDate = new Date(str[2]);
         let nextAttestationDate = new Date(str[3]);
         if (nextAttestationDate > nextCheckDate || str[0] == "" || checkDate < attestationDate) {
-          sheet.getRange(index, cellcol - 1).setValue(attestationDate);
+          dateList.getRange(index, cellcol - 1).setValue(attestationDate);
         }
         break;
     }
@@ -48,7 +48,7 @@ function onEdit() {
   if (actSheetName === 'Управление сотрудником' && index > 5) {
     switch (cellcol) {
       case 5:
-        sheet.getRange(index, cellcol + 1).setValue(active.getValue());
+        personalList.getRange(index, cellcol + 1).setValue(active.getValue());
         break;
       case 6:
         let str = sheet.getRange(index, 5, 1, 10).getValues().flat(1);
@@ -57,7 +57,7 @@ function onEdit() {
         let checkDate = new Date(str[0]);
         let nextCheckDate = (new Date(checkDate)).setMonth(checkDate.getMonth() + str[8]);
         if (nextAttestationDate > nextCheckDate || str[0] == "" || checkDate < attestationDate) {
-          sheet.getRange(index, cellcol - 1).setValue(attestationDate);
+          personalList.getRange(index, cellcol - 1).setValue(attestationDate);
         }
         break;
       case 2:
@@ -99,15 +99,12 @@ function importValues() {
   // импорт данных из удостоверений и инструмента в персональный список
   let personalID = personalList.getRange(2, 2).getValue();                                          // получаем строку запроса
   const dateListValues = dateList.getRange(3, 6, dateList.getLastRow() - 2, 8).getValues();         // получаем значения с листа дат
-  const toDay = new Date(new Date(Date.now()).getFullYear(),                                        // текущая дата
-    new Date(Date.now()).getMonth(),
-    new Date(Date.now()).getDate());
-
-  let result = arrayGen(dateListValues, personalID, toDay).flat();                                         // получаем список имущества
+  let result = arrayGen(dateListValues, personalID).flat();                                         // получаем список имущества
 
   // ====================ОТПРАВКА ДАННЫХ В ТАБЛИЦУ====================
   // Чистим тело таблицы от данных
-  personalList.getRange(6, 2, personalList.getLastRow() - 4, 9).clearDataValidations().clearContent();
+  personalList.getRange(6, 2, personalList.getLastRow() - 4, 2).clearDataValidations()
+  personalList.getRange(6, 1, personalList.getLastRow() - 4, 9).clearContent();
   personalList.getRange(result.length - 24, 2, 30, 1)
     .setDataValidation(SpreadsheetApp.newDataValidation()
       .setAllowInvalid(false)
@@ -135,9 +132,12 @@ function insertToArray(toArray, data, mark, interval) {
   return toArray;
 };
 
-function arrayGen(dateListValues, personalID, toDay) {
+function arrayGen(dateListValues, personalID) {
   // создаём заготовку для вывода данных
   let result;
+  const toDay = new Date(new Date(Date.now()).getFullYear(),                                        // текущая дата
+    new Date(Date.now()).getMonth(),
+    new Date(Date.now()).getDate());
   let ended = [["", "", "Просрочены:", "", "", "", "", "", ""]];
   let nearest = [["", "", "Осталось до месяца:", "", "", "", "", "", ""]];
   let near = [["", "", "Осталось до 90 дней:", "", "", "", "", "", ""]];
