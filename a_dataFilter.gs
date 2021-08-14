@@ -1,7 +1,7 @@
 // Структура данных находится в гугл-таблице. Ссылка приложена в описании репозитория
 // Все указанные здесь переменные и функции находятся в области видимости бота, находящегося в файле b_BOT.gs
 
-/* Version 02.06.2021 23:50 */
+/* Version 10.06.2021 */
 const ss = SpreadsheetApp.getActiveSpreadsheet()                  // получаем доступ  к активной таблице
 const personalList = ss.getSheetByName('Управление сотрудником'); //                  к персональному листу
 const dateList = ss.getSheetByName('Даты проверок');              //                  к листу с датами
@@ -50,7 +50,7 @@ function onEdit() {
       case 5:
         personalList.getRange(index, cellcol + 1).setValue(active.getValue());
         break;
-      case 6:
+/*      case 6:
         let str = sheet.getRange(index, 5, 1, 10).getValues().flat(1);
         let attestationDate = new Date(str[1]);
         let nextAttestationDate = (new Date(attestationDate)).setMonth(attestationDate.getMonth() + str[9]);
@@ -60,7 +60,7 @@ function onEdit() {
           personalList.getRange(index, cellcol - 1).setValue(attestationDate);
         }
         break;
-      case 2:
+*/      case 2:
         if (index > sheet.getRange(5, 10).getValue()) {
           dropDownLists(index, lastIndex - index + 1);
         }
@@ -212,4 +212,3 @@ function exportValues() {
 
   personalList.getRange(4, 11).setValue('Выполнить?');
 }
-// */
