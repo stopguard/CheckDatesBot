@@ -1,5 +1,5 @@
-const botToken = '1736476926:AAEFRmIsqE2RY4Y2u6ZpKEPMOHf9paCEBCY';
-const webAppUrl = "https://script.google.com/macros/s/AKfycbx0RhclaWL3DN_wgkptrU8_oWwDyzx0s7jM0BctFU8_vxNHKjKeRq-n-_SnO2ZiTr6Nfg/exec";
+const botToken = '1806755265:AAEfT28OfIPFzvFjjmz77l2Q3BhsZs4hJkM';
+const webAppUrl = 'https://script.google.com/macros/s/AKfycbx5HKPT8YzYIN53heCA5NdCBd1ZHeiqezsw_94BR47hXbTYQCayCujBUE3CiG2OVZlzbA/exec';
 
 /* Version 10.06.2021 */
 const autoLists = ss.getSheetByName('[svc]AutoLists')                                     // получаем доступ  к сервисному листу
